@@ -2,7 +2,7 @@
 ## Front matter
 title: "Отчёт по лабораторной работе 9"
 subtitle: "Настройка POP3/IMAP сервера"
-author: "Абрикосов Артем"
+author: "Одеджими олуваколаде"
 
 ## Generic otions
 lang: ru-RU
