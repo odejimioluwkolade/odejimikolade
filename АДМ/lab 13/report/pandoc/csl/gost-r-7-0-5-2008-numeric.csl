@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0" demote-non-dropping-particle="never" default-locale="ru-RU">
+  <info>
+    <title>GOST R 7.0.5-2008 (numeric)</title>
+    <id>http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric</id>
+    <link href="http://www.zotero.org/styles/gost-r-7-0-5-2008-numeric" rel="self"/>
+    <author><name>Андрей Россомахин</name></author>
+    <category citation-format="numeric"/>
+    <category field="generic-base"/>
+    <updated>2012-09-27T22:06:38+00:00</updated>
+  </info>
+  <citation collapse="citation-number">
+    <sort><key variable="citation-number"/></sort>
+    <layout prefix="[" suffix="]" delimiter=", ">
+      <text variable="citation-number"/>
+    </layout>
+  </citation>
+  <bibliography entry-spacing="0" second-field-align="flush">
+    <layout>
+      <text variable="citation-number" prefix="[" suffix="] "/>
+      <group delimiter=" / ">
+        <names variable="author"><name delimiter=", " delimiter-precedes-last="always" initialize-with=". " name-as-sort-order="all"/></names>
+        <text variable="title" font-style="italic"/>
+      </group>
+      <choose>
+        <if type="webpage post-weblog" match="any">
+          <group prefix=". — " delimiter=". — ">
+            <text variable="URL" prefix="URL: "/>
+            <date variable="accessed" prefix="(дата обращения: " suffix=")">
+              <date-part name="day" suffix="."/><date-part name="month" form="numeric" suffix="."/><date-part name="year"/>
+            </date>
+          </group>
+        </if>
+        <else>
+          <group prefix=". — " delimiter=", ">
+            <text variable="publisher-place"/>
+            <text variable="publisher"/>
+            <date variable="issued"><date-part name="year"/></date>
+          </group>
+        </else>
+      </choose>
+    </layout>
+  </bibliography>
+</style>

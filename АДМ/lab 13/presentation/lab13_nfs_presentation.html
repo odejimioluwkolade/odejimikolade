@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ru-RU">
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="author" content="Одеджими Олуваколаде">
+  <title>Администрирование сетевых подсистем</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+  <link href="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fdist%2Freset%2Ecss" rel="stylesheet">
+  <link href="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fdist%2Freveal%2Ecss" rel="stylesheet">
+  <style>
+.reveal .sourceCode {
+overflow: visible;
+}
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <link href="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fdist%2Ftheme%2Fbeige%2Ecss" rel="stylesheet" id="theme">
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+<section id="title-slide">
+  <h1 class="title">Администрирование сетевых подсистем</h1>
+  <p class="subtitle">Лабораторная работа №13 — Настройка NFS</p>
+  <p class="author">Одеджими Олуваколаде</p>
+  <p class="institute">Российский университет дружбы народов, Москва, Россия</p>
+  <p class="date">16 марта 2026</p>
+</section>
+
+<section>
+<section id="цель-работы" class="title-slide slide level1">
+<h1>Цель работы</h1>
+</section>
+<section id="цель-работы-slide" class="slide level2">
+<h2>Цель работы</h2>
+<p>Приобретение практических навыков по настройке сервера NFS (Network File System)
+для удалённого доступа к ресурсам в операционной системе AlmaLinux/RHEL
+в среде виртуализации Vagrant.</p>
+<p><strong>Задания:</strong></p>
+<ol>
+<li>Настроить NFS-сервер: установить <code>nfs-utils</code>, создать дерево <code>/srv/nfs</code>,
+настроить SELinux, запустить <code>nfs-server.service</code></li>
+<li>Подмонтировать на клиенте: смонтировать <code>/srv/nfs</code> в <code>/mnt/nfs</code>,
+настроить <code>fstab</code> с опцией <code>_netdev</code>, проверить <code>remote-fs.target</code></li>
+<li>Подключить каталоги: bind-монтирование <code>/var/www</code> и <code>~/common</code> к дереву NFS;
+настроить автоматизацию Vagrant</li>
+</ol>
+</section></section>
+
+<section>
+<section id="настройка-сервера-nfsv4" class="title-slide slide level1">
+<h1>Настройка сервера NFSv4</h1>
+</section>
+<section id="установка-и-конфигурация" class="slide level2">
+<h2>Установка и конфигурация</h2>
+<pre><code>dnf -y install nfs-utils
+mkdir -p /srv/nfs
+# /etc/exports:
+/srv/nfs *(ro)
+semanage fcontext -a -t nfs_t \
+  "/srv/nfs(/.*)?"
+restorecon -vR /srv/nfs
+systemctl start nfs-server.service
+systemctl enable nfs-server.service</code></pre>
+</section>
+<section id="межсетевой-экран-и-проверка" class="slide level2">
+<h2>Межсетевой экран и проверка</h2>
+<pre><code>firewall-cmd --add-service=nfs
+firewall-cmd --add-service=nfs --permanent
+firewall-cmd --reload
+# Добавление mountd и rpc-bind:
+firewall-cmd --add-service=mountd \
+  --add-service=rpc-bind
+firewall-cmd --add-service=mountd \
+  --add-service=rpc-bind --permanent
+firewall-cmd --reload</code></pre>
+<p>Проверка с клиента:</p>
+<pre><code>showmount -e server.kolade.net
+→ Export list for server.kolade.net: /srv/nfs *</code></pre>
+</section></section>
+
+<section>
+<section id="монтирование-nfs-на-клиенте" class="title-slide slide level1">
+<h1>Монтирование NFS на клиенте</h1>
+</section>
+<section id="монтирование-и-проверка" class="slide level2">
+<h2>Монтирование и проверка</h2>
+<pre><code># Установка на клиенте:
+dnf -y install nfs-utils
+# Создание точки монтирования:
+mkdir -p /mnt/nfs
+mount server.kolade.net:/srv/nfs /mnt/nfs
+# Проверка:
+mount | grep nfs
+→ server.kolade.net:/srv/nfs on /mnt/nfs
+  type nfs4 (rw,relatime,vers=4.2,...)</code></pre>
+</section>
+<section id="автомонтирование-etc-fstab" class="slide level2">
+<h2>Автомонтирование /etc/fstab</h2>
+<pre><code># Запись в /etc/fstab (строка 17):
+server.kolade.net:/srv/nfs \
+  /mnt/nfs nfs _netdev 0 0
+# _netdev: ждать инициализации сети
+# 0 0: отключить dump и fsck
+
+# Проверка remote-fs.target:
+systemctl status remote-fs.target
+→ active (running)
+→ Active since 2026-03-09 13:32:50</code></pre>
+<p><code>ls /mnt/nfs/</code> → каталог <code>www</code> виден сразу после монтирования;
+после перезапуска клиента ресурс монтируется автоматически.</p>
+</section></section>
+
+<section>
+<section id="подключение-каталогов-к-дереву-nfs" class="title-slide slide level1">
+<h1>Подключение каталогов к дереву NFS</h1>
+</section>
+<section id="каталог-веб-сервера-var-www" class="slide level2">
+<h2>Каталог веб-сервера (/var/www)</h2>
+<pre><code># Bind-монтирование:
+mkdir -p /srv/nfs/www
+mount -o bind /var/www /srv/nfs/www
+# /etc/exports добавить:
+/srv/nfs/www 192.168.0.0/16(rw)
+# /etc/fstab сервера (строка 17):
+/var/www /srv/nfs/www none bind 0 0
+exportfs -r</code></pre>
+</section>
+<section id="каталог-пользователя-kolade" class="slide level2">
+<h2>Каталог пользователя kolade</h2>
+<pre><code># Сервер — создание ~/common:
+mkdir -p -m 700 ~/common
+touch kolade@server.txt
+mkdir -p /srv/nfs/home/kolade
+mount -o bind ~/common /srv/nfs/home/kolade
+# /etc/exports добавить:
+/srv/nfs/home/kolade 192.168.0.0/16(rw)
+# /etc/fstab (строка 18):
+~/common /srv/nfs/home/kolade none bind 0 0</code></pre>
+<p>Итоговый <code>/etc/exports</code>:</p>
+<pre><code>/srv/nfs *(ro)
+/srv/nfs/www 192.168.0.0/16(rw)
+/srv/nfs/home/kolade 192.168.0.0/16(rw)</code></pre>
+</section></section>
+
+<section>
+<section id="проверка-прав-доступа" class="title-slide slide level1">
+<h1>Проверка прав доступа</h1>
+</section>
+<section id="клиент-пользователь-kolade" class="slide level2">
+<h2>Клиент — пользователь kolade</h2>
+<pre><code>cd /mnt/nfs/home/kolade
+ls -l
+-rw-r--r-- 1 kolade kolade  kolade@server.txt
+touch kolade@client.txt
+ls -l
+-rw-r--r-- kolade@client.txt
+-rw-r--r-- kolade@server.txt</code></pre>
+<p><strong>Сервер — проверка ~/common:</strong></p>
+<pre><code>ls -l ~/common
+-rw-r--r-- kolade@client.txt
+-rw-r--r-- kolade@server.txt
+# root на клиенте пытается войти:
+cd /mnt/nfs/home/kolade
+→ -bash: Permission denied   # Права 700 работают!</code></pre>
+</section></section>
+
+<section>
+<section id="скрипты-vagrant" class="title-slide slide level1">
+<h1>Скрипты Vagrant</h1>
+</section>
+<section id="provision-server-nfs-sh" class="slide level2">
+<h2>provision/server/nfs.sh</h2>
+<pre><code>#!/bin/bash
+dnf -y install nfs-utils
+cp -R /vagrant/provision/server/nfs/etc/* /etc
+restorecon -vR /etc
+firewall-cmd --add-service=nfs --permanent
+firewall-cmd --add-service=mountd \
+  --add-service=rpc-bind --permanent
+firewall-cmd --reload
+mkdir -p /srv/nfs
+semanage fcontext -a -t nfs_t "/srv/nfs(/.*)?"
+restorecon -vR /srv/nfs
+mkdir -p /srv/nfs/www
+mount -o bind /var/www /srv/nfs/www
+echo "/var/www /srv/nfs/www none bind 0 0" >> /etc/fstab
+mkdir -p /srv/nfs/home/kolade
+mkdir -p -m 700 /home/kolade/common
+chown kolade:kolade /home/kolade/common
+mount -o bind /home/kolade/common /srv/nfs/home/kolade
+systemctl enable nfs-server && systemctl start nfs-server</code></pre>
+</section>
+<section id="provision-client-nfs-sh" class="slide level2">
+<h2>provision/client/nfs.sh</h2>
+<pre><code>#!/bin/bash
+dnf -y install nfs-utils
+mkdir -p /mnt/nfs
+mount server.kolade.net:/srv/nfs /mnt/nfs
+echo "server.kolade.net:/srv/nfs \
+  /mnt/nfs nfs _netdev 0 0" >> /etc/fstab
+restorecon -vR /etc</code></pre>
+<p><strong>Vagrantfile:</strong></p>
+<pre><code>server.vm.provision "server nfs",
+  type: "shell", preserve_order: true,
+  path: "provision/server/nfs.sh"
+client.vm.provision "client nfs",
+  type: "shell", preserve_order: true,
+  path: "provision/client/nfs.sh"</code></pre>
+</section></section>
+
+<section>
+<section id="скриншоты" class="title-slide slide level1">
+<h1>Скриншоты</h1>
+</section>
+<section id="файл-etc-exports-начальная-конфигурация" class="slide level2">
+<h2>Файл /etc/exports — начальная конфигурация</h2>
+<figure>
+<img data-src="Screenshot_1.png" style="width:80.0%" alt="Файл /etc/exports — начальная конфигурация /srv/nfs *(ro)" />
+<figcaption aria-hidden="true">Файл /etc/exports — начальная конфигурация /srv/nfs *(ro)</figcaption>
+</figure>
+</section>
+<section id="сервер-установка-nfs-utils-selinux-firewall" class="slide level2">
+<h2>Сервер: установка nfs-utils, SELinux, firewall-cmd</h2>
+<figure>
+<img data-src="Screenshot_2.png" style="width:80.0%" alt="Установка nfs-utils, настройка exports, SELinux, firewall-cmd" />
+<figcaption aria-hidden="true">Установка nfs-utils, настройка exports, SELinux, firewall-cmd</figcaption>
+</figure>
+</section>
+<section id="клиент-монтирование-nfs-nfsv4" class="slide level2">
+<h2>Клиент: монтирование NFS, mount | grep nfs (NFSv4)</h2>
+<figure>
+<img data-src="Screenshot_5.png" style="width:80.0%" alt="Клиент: монтирование NFS, mount | grep nfs (NFSv4)" />
+<figcaption aria-hidden="true">Клиент: монтирование NFS, mount | grep nfs (NFSv4)</figcaption>
+</figure>
+</section>
+<section id="клиент-remote-fs-target-active" class="slide level2">
+<h2>Клиент: remote-fs.target active, ls /mnt/nfs/ показывает www</h2>
+<figure>
+<img data-src="Screenshot_7.png" style="width:80.0%" alt="Клиент: remote-fs.target active, ls /mnt/nfs/ показывает www" />
+<figcaption aria-hidden="true">Клиент: remote-fs.target active, ls /mnt/nfs/ показывает www</figcaption>
+</figure>
+</section>
+<section id="сервер-common-двусторонний-доступ" class="slide level2">
+<h2>Сервер: ~/common — двусторонний доступ</h2>
+<figure>
+<img data-src="Screenshot_16.png" style="width:80.0%" alt="Сервер: ~/common — файлы от сервера и клиента (двусторонний доступ)" />
+<figcaption aria-hidden="true">Сервер: ~/common — файлы от сервера и клиента (двусторонний доступ)</figcaption>
+</figure>
+</section>
+</section>
+
+<section>
+<section id="выводы" class="title-slide slide level1">
+<h1>Выводы</h1>
+</section>
+<section id="вывод" class="slide level2">
+<h2>Вывод</h2>
+<ul>
+<li>Установлен <code>nfs-utils</code>; создан корень <code>/srv/nfs</code> с SELinux-контекстом <code>nfs_t</code>; запущен <code>nfs-server.service</code></li>
+<li>Межсетевой экран настроен: открыты <code>nfs</code>, <code>mountd</code> и <code>rpc-bind</code> — без этого клиент получает ошибку RPC</li>
+<li>Клиент смонтировал <code>/srv/nfs</code> в <code>/mnt/nfs</code>; опция <code>_netdev</code> в <code>/etc/fstab</code> гарантирует монтирование после загрузки сети</li>
+<li>Каталог <code>/var/www</code> и домашний <code>~/common</code> подключены через bind-монтирование — двусторонний обмен файлами подтверждён</li>
+<li>Права 700 на <code>~/common</code> корректно запрещают доступ <code>root</code> на клиенте (root_squash работает по умолчанию)</li>
+<li>Скрипты Vagrant <code>nfs.sh</code> для сервера и клиента автоматизируют полное развёртывание NFS</li>
+</ul>
+</section></section>
+
+    </div>
+  </div>
+
+  <script src="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fdist%2Freveal%2Ejs"></script>
+  <script src="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fplugin%2Fnotes%2Fnotes%2Ejs"></script>
+  <script src="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fplugin%2Fsearch%2Fsearch%2Ejs"></script>
+  <script src="data:text/plain;charset=UTF-8;charset=utf-8,Not%20found%3A%20%2Freveal%2Ejs%404%2E6%2E1%2F%2Fplugin%2Fzoom%2Fzoom%2Ejs"></script>
+
+  <script>
+      Reveal.initialize({
+        controls: true,
+        controlsTutorial: true,
+        controlsLayout: 'bottom-right',
+        controlsBackArrows: 'faded',
+        progress: true,
+        slideNumber: false,
+        showSlideNumber: 'all',
+        hash: true,
+        hashOneBasedIndex: false,
+        respondToHashChanges: true,
+        history: false,
+        keyboard: true,
+        overview: true,
+        disableLayout: false,
+        center: true,
+        touch: true,
+        loop: false,
+        rtl: false,
+        navigationMode: 'default',
+        shuffle: false,
+        fragments: true,
+        fragmentInURL: true,
+        embedded: false,
+        help: true,
+        pause: true,
+        showNotes: false,
+        autoPlayMedia: null,
+        preloadIframes: null,
+        autoSlide: 0,
+        autoSlideStoppable: true,
+        autoSlideMethod: null,
+        defaultTiming: null,
+        mouseWheel: false,
+        display: 'block',
+        hideInactiveCursor: true,
+        hideCursorTime: 5000,
+        previewLinks: false,
+        transition: 'slide',
+        transitionSpeed: 'default',
+        backgroundTransition: 'fade',
+        viewDistance: 3,
+        mobileViewDistance: 2,
+        plugins: [
+          RevealNotes,
+          RevealSearch,
+          RevealZoom
+        ]
+      });
+    </script>
+    </body>
+</html>
